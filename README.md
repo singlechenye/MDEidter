@@ -15,7 +15,7 @@ A lightweight, high-performance Markdown editor built with **Electron + React + 
   - **Source Mode** - Pure source code editing for advanced users
 - **Theme Switching** - Dark/Light themes with automatic persistence
 - **File Operations** - New, Open, Save, Save As Markdown files
-- **Export** - Export to HTML format with preserved styles
+- **Export** - Export to HTML/PDF format with preserved styles
 
 ### Editor Features
 
@@ -55,6 +55,49 @@ A lightweight, high-performance Markdown editor built with **Electron + React + 
 git clone https://github.com/singlechenye/MDEidter.git
 cd md-editor
 npm install
+```
+
+### Mirror Configuration (China Users)
+
+> **国内用户请注意**：由于网络原因，建议在安装依赖前设置镜像源，否则 Electron 等依赖下载可能失败。
+
+**Windows (PowerShell):**
+
+```powershell
+# Electron 镜像
+$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+
+# electron-builder 二进制镜像
+$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://cdn.npmmirror.com/binaries/electron-builder-binaries/"
+
+# 其他常用镜像（可选）
+$env:CHROMEDRIVER_CDNURL="https://npmmirror.com/mirrors/chromedriver/"
+$env:SASS_BINARY_SITE="https://npmmirror.com/mirrors/node-sass/"
+$env:PUPPETEER_DOWNLOAD_HOST="https://npmmirror.com/mirrors/puppeteer/"
+
+# 然后运行 npm install
+npm install
+```
+
+**macOS / Linux (Bash):**
+
+```bash
+# Electron 镜像
+export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+
+# electron-builder 二进制镜像
+export ELECTRON_BUILDER_BINARIES_MIRROR="https://cdn.npmmirror.com/binaries/electron-builder-binaries/"
+
+# 然后运行 npm install
+npm install
+```
+
+**持久化配置（推荐）:**
+
+```bash
+# 创建或编辑 .npmrc 文件
+echo "electron_mirror=https://npmmirror.com/mirrors/electron/" >> .npmrc
+echo "electron_builder_binaries_mirror=https://cdn.npmmirror.com/binaries/electron-builder-binaries/" >> .npmrc
 ```
 
 ## Usage
@@ -141,7 +184,7 @@ MIT License
   - **源码模式** - 纯源码编辑，适合高级用户
 - **主题切换** - 暗色/亮色主题，自动持久化保存
 - **文件操作** - 新建、打开、保存、另存为 Markdown 文件
-- **导出功能** - 导出为 HTML 格式，保留样式
+- **导出功能** - 导出为 HTML/PDF 格式，保留样式
 
 ### 编辑器特性
 
@@ -181,6 +224,49 @@ MIT License
 git clone https://github.com/singlechenye/MDEidter.git
 cd md-editor
 npm install
+```
+
+### 镜像配置（国内用户必看）
+
+> **国内用户请注意**：由于网络原因，建议在安装依赖前设置镜像源，否则 Electron 等依赖下载可能失败。
+
+**Windows (PowerShell):**
+
+```powershell
+# Electron 镜像
+$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+
+# electron-builder 二进制镜像
+$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://cdn.npmmirror.com/binaries/electron-builder-binaries/"
+
+# 其他常用镜像（可选）
+$env:CHROMEDRIVER_CDNURL="https://npmmirror.com/mirrors/chromedriver/"
+$env:SASS_BINARY_SITE="https://npmmirror.com/mirrors/node-sass/"
+$env:PUPPETEER_DOWNLOAD_HOST="https://npmmirror.com/mirrors/puppeteer/"
+
+# 然后运行 npm install
+npm install
+```
+
+**macOS / Linux (Bash):**
+
+```bash
+# Electron 镜像
+export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+
+# electron-builder 二进制镜像
+export ELECTRON_BUILDER_BINARIES_MIRROR="https://cdn.npmmirror.com/binaries/electron-builder-binaries/"
+
+# 然后运行 npm install
+npm install
+```
+
+**持久化配置（推荐）:**
+
+```bash
+# 创建或编辑 .npmrc 文件
+echo "electron_mirror=https://npmmirror.com/mirrors/electron/" >> .npmrc
+echo "electron_builder_binaries_mirror=https://cdn.npmmirror.com/binaries/electron-builder-binaries/" >> .npmrc
 ```
 
 ### 开发模式
