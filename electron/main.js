@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -10,6 +10,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      webSecurity: false, // 允许加载本地文件
     },
     frame: false,
     backgroundColor: '#1e1e1e',
@@ -48,6 +49,55 @@ ipcMain.handle('read-file', async (event, filePath) => {
   try {
     const content = await fs.promises.readFile(filePath, 'utf-8');
     return { success: true, content };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// 读取图片文件返回 base64
+ipcMain.handle('read-image-file', async (event, filePath) => {
+  try {
+    const buffer = await fs.promises.readFile(filePath);
+    const base64 = buffer.toString('base64');
+    
+    // 根据扩展名确定 MIME 类型
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeTypes = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml',
+      '.bmp': 'image/bmp'
+    };
+    const mimeType = mimeTypes[ext] || 'image/png';
+    
+    return { success: true, base64, mimeType, size: buffer.length };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// 保存图片文件到指定目录（绝对路径）
+ipcMain.handle('save-image-file', async (event, dirPath, fileName, base64Data, mimeType) => {
+  try {
+    // 确保目录存在
+    if (!fs.existsSync(dirPath)) {
+      await fs.promises.mkdir(dirPath, { recursive: true });
+    }
+    
+    // 构建完整文件路径
+    const filePath = path.join(dirPath, fileName);
+    
+    // 将 base64 转换为 Buffer
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    // 写入文件
+    await fs.promises.writeFile(filePath, buffer);
+    
+    // 返回绝对路径
+    return { success: true, filePath };
   } catch (error) {
     return { success: false, error: error.message };
   }

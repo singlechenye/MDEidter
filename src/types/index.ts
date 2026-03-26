@@ -4,6 +4,8 @@ declare global {
     electronAPI?: {
       readFile: (filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>;
       writeFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
+      readImageFile: (filePath: string) => Promise<{ success: boolean; base64?: string; mimeType?: string; size?: number; error?: string }>;
+      saveImageFile: (dirPath: string, fileName: string, base64Data: string, mimeType: string) => Promise<{ success: boolean; filePath?: string; error?: string }>;
       showOpenDialog: (options: any) => Promise<{ canceled: boolean; filePaths: string[] }>;
       showSaveDialog: (options: any) => Promise<{ canceled: boolean; filePath?: string }>;
       exportPDF: (htmlContent: string, title: string) => Promise<{ success: boolean; canceled?: boolean; filePath?: string; error?: string }>;
@@ -27,21 +29,17 @@ export interface Tab {
 // 主题类型
 export type Theme = 'dark' | 'light';
 
-// 编辑模式类型
-export type EditMode = 'wysiwyg' | 'split' | 'source';
-
 // 工具栏组件 Props
 export interface ToolbarProps {
   theme: Theme;
-  editMode: EditMode;
   onThemeChange: (theme: Theme) => void;
-  onEditModeChange: (mode: EditMode) => void;
   onSaveFile: (saveAs: boolean) => void;
   onExportHTML: () => void;
   onExportPDF: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onOpenFiles: () => void;
+  onSettings?: () => void;
   onMinimize?: () => void;
   onMaximize?: () => void;
   onClose?: () => void;

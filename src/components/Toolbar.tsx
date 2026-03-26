@@ -4,15 +4,14 @@ import type { ToolbarProps } from '../types';
 // 工具栏组件 - 只返回内部内容，外层容器由父组件控制
 function Toolbar({
   theme,
-  editMode,
   onThemeChange,
-  onEditModeChange,
   onSaveFile,
   onExportHTML,
   onExportPDF,
   onUndo,
   onRedo,
   onOpenFiles,
+  onSettings,
   onMinimize,
   onMaximize,
   onClose
@@ -32,32 +31,6 @@ function Toolbar({
 
       <div className="toolbar-divider" />
 
-      <div className="toolbar-group edit-modes">
-        <button
-          className={editMode === 'wysiwyg' ? 'active' : ''}
-          onClick={() => onEditModeChange('wysiwyg')}
-          title="WYSIWYG"
-        >
-          WYS
-        </button>
-        <button
-          className={editMode === 'split' ? 'active' : ''}
-          onClick={() => onEditModeChange('split')}
-          title="Split View"
-        >
-          SPLIT
-        </button>
-        <button
-          className={editMode === 'source' ? 'active' : ''}
-          onClick={() => onEditModeChange('source')}
-          title="Source Code"
-        >
-          SRC
-        </button>
-      </div>
-
-      <div className="toolbar-divider" />
-
       <div className="toolbar-group">
         <button onClick={() => onSaveFile(false)} title="Save (Ctrl+S)"><Icons.Save /></button>
         <button onClick={onExportHTML} title="Export HTML"><Icons.Export /></button>
@@ -67,6 +40,9 @@ function Toolbar({
       <div className="toolbar-spacer" />
 
       <div className="toolbar-group">
+        {onSettings && (
+          <button onClick={onSettings} title="Settings"><Icons.Settings /></button>
+        )}
         <button onClick={() => onThemeChange(theme === 'dark' ? 'light' : 'dark')} title="Toggle Theme">
           {theme === 'dark' ? <Icons.Sun /> : <Icons.Moon />}
         </button>

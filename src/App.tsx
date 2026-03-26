@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import MarkdownIt from 'markdown-it';
-import { Toolbar, WysiwygEditor, MonacoEditor, PreviewPane, CommandPalette, ShortcutHelp } from './components';
-import type { Tab, Theme, EditMode } from './types';
+import { Toolbar, MonacoEditor, PreviewPane, CommandPalette, ShortcutHelp, ContextMenu, ToastContainer, toast, Settings, settingsManager } from './components';
+import type { Tab, Theme } from './types';
 import { generateId } from './types';
 import { editorManager } from './utils/editorManager';
 import './App.css';
@@ -19,10 +19,47 @@ function App() {
   ]);
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0].id);
   const [theme, setTheme] = useState<Theme>('dark');
-  const [editMode, setEditMode] = useState<EditMode>('wysiwyg');
+  const [layoutMode, setLayoutMode] = useState<'split' | 'editor-full' | 'preview-full'>('split');
+  const [splitPosition, setSplitPosition] = useState(50); // 分栏比例，默认 50%
+
+  // 切换布局模式
+  const toggleLayoutMode = useCallback(() => {
+    setLayoutMode(prev => {
+      if (prev === 'split') return 'editor-full';
+      if (prev === 'editor-full') return 'preview-full';
+      return 'split';
+    });
+  }, []);
+
+  // 拖动分隔线
+  const startDrag = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startSplitPosition = splitPosition;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const containerWidth = document.querySelector('.split-container')?.clientWidth || window.innerWidth;
+      const deltaX = moveEvent.clientX - startX;
+      const percentageDelta = (deltaX / containerWidth) * 100;
+      const newPosition = Math.max(20, Math.min(80, startSplitPosition + percentageDelta)); // 限制在 20%-80%
+      setSplitPosition(newPosition);
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [splitPosition]);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isToolbarVisible, setIsToolbarVisible] = useState(false);
   const [isShortcutHelpOpen, setIsShortcutHelpOpen] = useState(false);
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const mdParser = useRef<MarkdownIt>(new MarkdownIt({
     html: true,
@@ -38,16 +75,16 @@ function App() {
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       const threshold = 60; // 顶部 60px 区域触发显示
-      
+
       // 检查鼠标是否在工具栏区域内
       const isInToolbar = toolbarRef.current?.contains(e.target as Node);
-      
+
       // 清除之前的隐藏定时器
       if (hideTimeoutRef.current) {
         clearTimeout(hideTimeoutRef.current);
         hideTimeoutRef.current = null;
       }
-      
+
       if (e.clientY <= threshold || isInToolbar) {
         setIsToolbarVisible(true);
       } else {
@@ -84,6 +121,285 @@ function App() {
         : tab
     ));
   }, []);
+
+  // 插入文本到编辑器
+  const handleInsertText = useCallback((text: string, cursorOffset?: number) => {
+    if (!activeTab) return;
+
+    // 通过 editorManager 插入文本
+    editorManager.insertText(text, cursorOffset);
+  }, [activeTab]);
+
+  // 包裹选中文本
+  const handleWrapSelection = useCallback((before: string, after: string) => {
+    if (!activeTab) return;
+
+    // 通过 editorManager 包裹选中文本
+    editorManager.wrapSelection(before, after);
+  }, [activeTab]);
+
+  // 右键菜单
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenuPosition({ x: e.clientX, y: e.clientY });
+    setIsContextMenuOpen(true);
+  }, []);
+
+  // 监听原生 contextmenu 事件（用于 Monaco Editor）
+  const mainContentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const mainContent = mainContentRef.current;
+    if (!mainContent) return;
+
+    const handleNativeContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      setContextMenuPosition({ x: e.clientX, y: e.clientY });
+      setIsContextMenuOpen(true);
+    };
+
+    mainContent.addEventListener('contextmenu', handleNativeContextMenu);
+    return () => {
+      mainContent.removeEventListener('contextmenu', handleNativeContextMenu);
+    };
+  }, []);
+
+  // 压缩和调整图片尺寸
+  const resizeAndCompressImage = useCallback(async (file: File): Promise<{ blob: Blob; width: number; height: number }> => {
+    const settings = settingsManager.getSettings();
+    const sizeMode = settings.imageSizeMode || 'auto';
+    const maxWidth = settings.imageMaxWidth || 800;
+    const maxHeight = settings.imageMaxHeight || 600;
+
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+
+        let width: number;
+        let height: number;
+
+        if (sizeMode === 'fixed') {
+          // 固定尺寸模式
+          width = maxWidth;
+          height = maxHeight;
+        } else {
+          // 自适应模式 - 按比例缩放
+          let originalWidth = img.width;
+          let originalHeight = img.height;
+
+          // 如果图片尺寸在限制内，保持原尺寸
+          if (originalWidth <= maxWidth && originalHeight <= maxHeight) {
+            width = originalWidth;
+            height = originalHeight;
+          } else {
+            // 计算缩放比例
+            const ratioW = maxWidth / originalWidth;
+            const ratioH = maxHeight / originalHeight;
+            const ratio = Math.min(ratioW, ratioH);
+
+            width = Math.round(originalWidth * ratio);
+            height = Math.round(originalHeight * ratio);
+          }
+        }
+
+        // 创建 Canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+
+        // 绘制图片
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // 转换为 Blob
+        const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve({ blob, width, height });
+            } else {
+              reject(new Error('Failed to create blob'));
+            }
+          },
+          outputType,
+          0.92
+        );
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Failed to load image'));
+      };
+
+      img.src = url;
+    });
+  }, []);
+
+  // 处理图片文件并插入
+  const processAndInsertImage = useCallback(async (file: File) => {
+    // 检查文件类型
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    // 检查文件大小 (限制 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image size should be less than 10MB');
+      return;
+    }
+
+    const settings = settingsManager.getSettings();
+    const altText = file.name.replace(/\.[^/.]+$/, '');
+
+    // 获取图片保存路径
+    const imageSavePath = settings.imageSavePath;
+
+    if (!imageSavePath) {
+      // 没有设置保存路径，提示用户
+      toast.info('Please set image save path in Settings');
+      setIsSettingsOpen(true);
+      return;
+    }
+
+    try {
+      // 压缩和调整图片尺寸
+      const { blob, width, height } = await resizeAndCompressImage(file);
+
+      // 生成唯一文件名
+      const ext = file.type === 'image/png' ? 'png' : 'jpg';
+      const timestamp = Date.now();
+      const randomStr = Math.random().toString(36).substring(2, 6);
+      const newFileName = `img_${timestamp}_${randomStr}.${ext}`;
+
+      if (window.electronAPI) {
+        // Electron 环境 - 保存到本地文件
+        // 读取压缩后的 blob 为 ArrayBuffer
+        const arrayBuffer = await blob.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+
+        // 转换为 base64 用于传输
+        let binary = '';
+        uint8Array.forEach(byte => binary += String.fromCharCode(byte));
+        const base64Data = btoa(binary);
+
+        // 调用 Electron API 保存图片
+        const result = await window.electronAPI.saveImageFile(
+          imageSavePath,
+          newFileName,
+          base64Data,
+          blob.type
+        );
+
+        if (result.success && result.filePath) {
+          // 使用 HTML img 标签设置宽高
+          const markdown = `<img src="${result.filePath}" width="${width}" height="${height}" alt="${altText}">`;
+          editorManager.insertText(markdown);
+          toast.success(`Image saved (${width}x${height})`);
+        } else {
+          toast.error('Failed to save image: ' + (result.error || 'Unknown error'));
+        }
+      } else {
+        // Web 环境 - 使用路径
+        const filePath = `${imageSavePath}/${newFileName}`.replace(/\\/g, '/');
+        const markdown = `<img src="${filePath}" width="${width}" height="${height}" alt="${altText}">`;
+        editorManager.insertText(markdown);
+        toast.success(`Image path inserted (${width}x${height})`);
+        toast.info('Note: In web mode, please manually copy the image to the specified path');
+      }
+    } catch (error) {
+      toast.error('Failed to process image');
+      console.error(error);
+    }
+  }, [resizeAndCompressImage]);
+
+  // 粘贴事件处理 - 使用捕获阶段确保在 Monaco Editor 之前处理
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      // 查找图片项
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          e.stopPropagation();
+          const file = item.getAsFile();
+          if (file) {
+            processAndInsertImage(file);
+          }
+          return;
+        }
+      }
+    };
+
+    // 使用捕获阶段
+    document.addEventListener('paste', handlePaste, true);
+    return () => document.removeEventListener('paste', handlePaste, true);
+  }, [processAndInsertImage]);
+
+  // 拖拽事件处理
+  useEffect(() => {
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer?.types.includes('Files')) {
+        setIsDragging(true);
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      // 检查是否真的离开了窗口
+      if (e.relatedTarget === null) {
+        setIsDragging(false);
+      }
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+
+      const files = e.dataTransfer?.files;
+      if (!files || files.length === 0) return;
+
+      // 处理所有图片文件
+      let imageCount = 0;
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.type.startsWith('image/')) {
+          processAndInsertImage(file);
+          imageCount++;
+        }
+      }
+
+      if (imageCount === 0) {
+        toast.info('Please drop image files only');
+      }
+    };
+
+    const handleDragEnd = () => {
+      setIsDragging(false);
+    };
+
+    document.addEventListener('dragover', handleDragOver);
+    document.addEventListener('dragleave', handleDragLeave);
+    document.addEventListener('drop', handleDrop);
+    document.addEventListener('dragend', handleDragEnd);
+
+    return () => {
+      document.removeEventListener('dragover', handleDragOver);
+      document.removeEventListener('dragleave', handleDragLeave);
+      document.removeEventListener('drop', handleDrop);
+      document.removeEventListener('dragend', handleDragEnd);
+    };
+  }, [processAndInsertImage]);
 
   // 新建标签
   const handleNewTab = useCallback(() => {
@@ -278,6 +594,7 @@ function App() {
           table { border-collapse: collapse; width: 100%; margin: 1.5em 0; }
           th, td { border: 1px solid ${theme === 'dark' ? '#3e3e42' : '#ddd'}; padding: 8px 12px; text-align: left; }
           th { background: ${theme === 'dark' ? '#252526' : '#f5f5f5'}; font-weight: bold; }
+          img { max-width: 100%; height: auto; }
         </style>
       </head>
       <body>
@@ -294,7 +611,7 @@ function App() {
       }).then(result => {
         if (!result.canceled && result.filePath && window.electronAPI) {
           window.electronAPI.writeFile(result.filePath, htmlContent);
-          alert('HTML exported successfully!');
+          toast.success('HTML exported successfully!');
         }
       });
     } else {
@@ -305,6 +622,7 @@ function App() {
       a.download = `${activeTab.title.replace(/\.md$/, '')}.html`;
       a.click();
       URL.revokeObjectURL(url);
+      toast.success('HTML exported successfully!');
     }
   };
 
@@ -318,12 +636,12 @@ function App() {
     if (window.electronAPI) {
       const result = await window.electronAPI.exportPDF(htmlContent, title);
       if (result.success) {
-        alert('PDF exported successfully!');
+        toast.success('PDF exported successfully!');
       } else if (!result.canceled) {
-        alert('Failed to export PDF: ' + result.error);
+        toast.error('Failed to export PDF: ' + result.error);
       }
     } else {
-      alert('PDF export is only available in the desktop app.');
+      toast.info('PDF export is only available in the desktop app');
     }
   };
 
@@ -341,9 +659,15 @@ function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Esc 关闭快捷键帮助
-      if (e.key === 'Escape' && isShortcutHelpOpen) {
-        setIsShortcutHelpOpen(false);
-        return;
+      if (e.key === 'Escape') {
+        if (isShortcutHelpOpen) {
+          setIsShortcutHelpOpen(false);
+          return;
+        }
+        if (isContextMenuOpen) {
+          setIsContextMenuOpen(false);
+          return;
+        }
       }
 
       if (e.ctrlKey || e.metaKey) {
@@ -377,15 +701,23 @@ function App() {
             break;
           case '1':
             e.preventDefault();
-            setEditMode('wysiwyg');
+            toggleLayoutMode();
             break;
           case '2':
             e.preventDefault();
-            setEditMode('split');
+            toggleLayoutMode();
             break;
           case '3':
             e.preventDefault();
-            setEditMode('source');
+            toggleLayoutMode();
+            break;
+          case 'b':
+            e.preventDefault();
+            handleWrapSelection('**', '**');
+            break;
+          case 'i':
+            e.preventDefault();
+            handleWrapSelection('*', '*');
             break;
         }
       }
@@ -393,7 +725,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, activeTabId, tabs, isShortcutHelpOpen]);
+  }, [activeTab, activeTabId, tabs, isShortcutHelpOpen, isContextMenuOpen, handleWrapSelection]);
 
   // 切换标签时关闭命令面板
   const handleTabClick = useCallback((id: string) => {
@@ -426,21 +758,20 @@ function App() {
       <div className="window-drag-area" />
 
       {/* 悬浮毛玻璃工具栏 - 自动隐藏 */}
-      <div 
+      <div
         ref={toolbarRef}
         className={`floating-toolbar ${isToolbarVisible ? 'visible' : ''}`}
       >
         <Toolbar
           theme={theme}
-          editMode={editMode}
           onThemeChange={setTheme}
-          onEditModeChange={setEditMode}
           onSaveFile={handleSaveFile}
           onExportHTML={handleExportHTML}
           onExportPDF={handleExportPDF}
           onUndo={handleUndo}
           onRedo={handleRedo}
           onOpenFiles={() => setIsCommandPaletteOpen(true)}
+          onSettings={() => setIsSettingsOpen(true)}
           onMinimize={window.electronAPI ? handleMinimize : undefined}
           onMaximize={window.electronAPI ? handleMaximize : undefined}
           onClose={window.electronAPI ? handleClose : undefined}
@@ -460,36 +791,10 @@ function App() {
       />
 
       {/* 主内容区域 */}
-      <div className="main-content">
+      <div ref={mainContentRef} className="main-content" onContextMenu={handleContextMenu}>
         {activeTab && (
           <>
-            {editMode === 'wysiwyg' && (
-              <WysiwygEditor
-                key={activeTab.id}
-                content={activeTab.content}
-                onChange={(content) => updateTabContent(activeTab.id, content)}
-                theme={theme}
-              />
-            )}
-
-            {editMode === 'split' && (
-              <div className="split-container">
-                <div className="split-pane editor-pane">
-                  <MonacoEditor
-                    key={activeTab.id}
-                    content={activeTab.content}
-                    onChange={(content) => updateTabContent(activeTab.id, content)}
-                    theme={theme}
-                  />
-                </div>
-                <div className="split-divider" />
-                <div className="split-pane preview-pane">
-                  <PreviewPane content={activeTab.content} theme={theme} />
-                </div>
-              </div>
-            )}
-
-            {editMode === 'source' && (
+            {layoutMode === 'editor-full' ? (
               <div className="editor-pane full">
                 <MonacoEditor
                   key={activeTab.id}
@@ -498,10 +803,53 @@ function App() {
                   theme={theme}
                 />
               </div>
+            ) : layoutMode === 'preview-full' ? (
+              <div className="preview-pane full">
+                <PreviewPane content={activeTab.content} theme={theme} />
+              </div>
+            ) : (
+              <div className="split-container">
+                <div className="split-pane editor-pane" style={{ width: `${splitPosition}%` }}>
+                  <MonacoEditor
+                    key={activeTab.id}
+                    content={activeTab.content}
+                    onChange={(content) => updateTabContent(activeTab.id, content)}
+                    theme={theme}
+                  />
+                </div>
+                <div 
+                  className="split-divider draggable-divider"
+                  onMouseDown={startDrag}
+                />
+                <div className="split-pane preview-pane" style={{ width: `${100 - splitPosition}%` }}>
+                  <PreviewPane content={activeTab.content} theme={theme} />
+                </div>
+              </div>
             )}
           </>
         )}
       </div>
+
+      {/* 拖拽遮罩 */}
+      {isDragging && (
+        <div className="drag-overlay">
+          <div className="drag-content">
+            <span className="drag-icon">📷</span>
+            <span className="drag-text">Drop image here</span>
+          </div>
+        </div>
+      )}
+
+      {/* 右键菜单 */}
+      {isContextMenuOpen && (
+        <ContextMenu
+          x={contextMenuPosition.x}
+          y={contextMenuPosition.y}
+          onInsert={handleInsertText}
+          onWrapSelection={handleWrapSelection}
+          onClose={() => setIsContextMenuOpen(false)}
+        />
+      )}
 
       {/* 右下角帮助按钮 */}
       <button
@@ -517,6 +865,15 @@ function App() {
         isOpen={isShortcutHelpOpen}
         onClose={() => setIsShortcutHelpOpen(false)}
       />
+
+      {/* 设置面板 */}
+      <Settings
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
+
+      {/* Toast 容器 */}
+      <ToastContainer />
     </div>
   );
 }

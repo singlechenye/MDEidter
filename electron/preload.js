@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 文件操作
   readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
   writeFile: (filePath, content) => ipcRenderer.invoke('write-file', filePath, content),
+  readImageFile: (filePath) => ipcRenderer.invoke('read-image-file', filePath),
+  saveImageFile: (dirPath, fileName, base64Data, mimeType) => ipcRenderer.invoke('save-image-file', dirPath, fileName, base64Data, mimeType),
   showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options),
   showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),
 

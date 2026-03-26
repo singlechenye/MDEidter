@@ -8,4 +8,7 @@ export { default as PreviewPane } from './PreviewPane';
 export { default as SideDrawer } from './SideDrawer';
 export { default as CommandPalette } from './CommandPalette';
 export { default as ShortcutHelp } from './ShortcutHelp';
+export { default as ContextMenu } from './ContextMenu';
+export { default as Toast, ToastContainer, toast } from './Toast';
+export { default as Settings, settingsManager } from './Settings';
 export { Icons } from './Icons';

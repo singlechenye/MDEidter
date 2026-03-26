@@ -20,13 +20,14 @@ const shortcuts = [
   ]},
   { category: '视图切换', items: [
     { key: 'Ctrl+P', desc: '打开文件列表' },
-    { key: 'Ctrl+1', desc: 'WYSIWYG 模式' },
-    { key: 'Ctrl+2', desc: '分栏模式' },
-    { key: 'Ctrl+3', desc: '源码模式' },
+  ]},
+  { category: '布局控制', items: [
+    { key: '分界线', desc: '拖动调整源码/预览面板宽度' },
   ]},
   { category: '其他', items: [
     { key: '?', desc: '显示快捷键帮助' },
     { key: 'Esc', desc: '关闭面板' },
+    { key: 'Ctrl+1/2/3', desc: '切换布局模式' },
   ]},
 ];
 
